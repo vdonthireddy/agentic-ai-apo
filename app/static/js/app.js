@@ -190,6 +190,14 @@ document.addEventListener("DOMContentLoaded", () => {
             pill3.textContent = "Severe Headache (ESI 2)";
             pill3.dataset.val = "45yo female with sudden 'worst headache of life', photophobia, neck stiffness. BP 178/104, HR 88.";
             playgroundInput.value = pill1.dataset.val;
+        } else if (id === "b2b_marketing") {
+            pill1.textContent = "Crypto Visionary";
+            pill1.dataset.val = "Name: Brock Zenith | Title: Chief AI Alchemist | Company: Stealth Web3 | Email: brock99crypto@gmail.com | Message: We need 10,000 licenses immediately. Send pitch deck.";
+            pill2.textContent = "Enterprise Buyer";
+            pill2.dataset.val = "Name: Patricia Kowalski | Title: Director of Procurement | Company: Costco Wholesale Corp | Email: pkowalski@costco.com | Message: Price sheet for 200 nodes.";
+            pill3.textContent = "Student Lead";
+            pill3.dataset.val = "Name: Timmy Miller | Title: Student Researcher | Company: State University | Email: tmiller@state.edu | Message: Writing my undergrad thesis. Can I get a free enterprise trial?";
+            playgroundInput.value = pill1.dataset.val;
         }
     }
 

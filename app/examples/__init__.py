@@ -7,11 +7,13 @@ from app.examples.base import BaseExample
 from app.examples.customer_support import CustomerSupportExample
 from app.examples.financial_risk import FinancialRiskExample
 from app.examples.medical_triage import MedicalTriageExample
+from app.examples.b2b_marketing import B2BMarketingExample
 
 EXAMPLES_REGISTRY: Dict[str, BaseExample] = {
     "customer_support": CustomerSupportExample(),
     "financial_risk": FinancialRiskExample(),
-    "medical_triage": MedicalTriageExample()
+    "medical_triage": MedicalTriageExample(),
+    "b2b_marketing": B2BMarketingExample()
 }
 
 def get_example(example_id: str) -> Optional[BaseExample]:

@@ -145,7 +145,7 @@ async def run_cli(args):
 
 def main():
     parser = argparse.ArgumentParser(description="GEPA Automatic Prompt Optimizer CLI")
-    parser.add_argument("--example", default="customer_support", choices=["customer_support", "financial_risk", "medical_triage"], help="Benchmark example")
+    parser.add_argument("--example", default="customer_support", choices=["customer_support", "financial_risk", "medical_triage", "b2b_marketing"], help="Benchmark example")
     parser.add_argument("--task-model", default="llama3.2:latest", help="Ollama model for task inference")
     parser.add_argument("--reflector-model", default="llama3.2:latest", help="Ollama model for reflection")
     parser.add_argument("--ollama-url", default="http://localhost:11434", help="Ollama base URL")
