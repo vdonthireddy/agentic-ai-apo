@@ -162,36 +162,81 @@ flowchart LR
 
 ## 4. Algorithmic Formulation
 
-### 4.1 Pareto Dominance Formulation
-Let $C = \{c_1, c_2, \dots, c_m\}$ be candidate prompts. For each candidate $c$, the evaluator computes an objective vector:
-$$\mathbf{F}(c) = \left( f_1(c), f_2(c), \dots, f_k(c) \right)$$
-where:
-- $f_1(c) \in [0, 1]$: Core Task Accuracy / F1
-- $f_2(c) \in [0, 1]$: Strict Schema Compliance (JSON validity, key presence)
-- $f_3(c) \in [0, 1]$: Token Efficiency ($1.0 - \text{penalty for verbosity}$)
+### 4.1 Multi-Objective Evaluation & Pareto Dominance
 
-Candidate $c_a$ **Pareto-dominates** candidate $c_b$ ($c_a \succ c_b$) if and only if:
+#### 4.1.1 Objective Scorecard Vector
+When evaluating a candidate prompt $c \in C$, GEPA computes a multi-dimensional objective vector rather than a single compressed score:
+$$\mathbf{F}(c) = \left( f_1(c), f_2(c), \dots, f_k(c) \right)$$
+where each dimension represents an independent performance objective:
+- $f_1(c) \in [0, 1]$: **Task Accuracy** (Did the model produce the correct answer / classification?)
+- $f_2(c) \in [0, 1]$: **Schema Compliance** (Did the model return strictly valid JSON without markdown fences or missing keys?)
+- $f_3(c) \in [0, 1]$: **Token Efficiency** ($1.0 - \text{penalty for verbosity}$; rewards concise, low-latency prompts)
+
+> **Intuition**: In real-world production, accuracy alone is not enough. A prompt that achieves 95% accuracy but fails 30% of JSON parsing or costs 2,000 tokens per call is unacceptable. The objective vector measures all competing requirements simultaneously.
+
+#### 4.1.2 Pareto Dominance ($c_a \succ c_b$)
+Candidate prompt $c_a$ **Pareto-dominates** candidate prompt $c_b$ (written $c_a \succ c_b$) if and only if:
 $$\forall i \in \{1, \dots, k\}, \quad f_i(c_a) \ge f_i(c_b) \quad \land \quad \exists j \in \{1, \dots, k\}, \quad f_j(c_a) > f_j(c_b)$$
 
-The **Pareto Frontier** $\mathcal{P}^{\ast}$ is the subset of all candidates not dominated by any other candidate:
+- **$\forall i \in \{1, \dots, k\}, f_i(c_a) \ge f_i(c_b)$**: Prompt $c_a$ is at least as good as Prompt $c_b$ across **every** objective.
+- **$\exists j \in \{1, \dots, k\}, f_j(c_a) > f_j(c_b)$**: Prompt $c_a$ is strictly better than Prompt $c_b$ in at least **one** objective.
+
+> **Plain-English Rule**: Prompt A dominates Prompt B if Prompt A is **equal or better in every metric**, and **strictly better in at least one**. When this happens, Prompt B is strictly inferior and can be safely eliminated.
+>
+> **Concrete Example**:
+> - **Prompt A**: Accuracy = 90%, Schema = 100%, Tokens = 200 ($f_3 = 0.85$)
+> - **Prompt B**: Accuracy = 80%, Schema = 100%, Tokens = 250 ($f_3 = 0.80$)
+> - *Verdict*: Prompt A dominates Prompt B ($A \succ B$) because it is strictly higher in Accuracy and Token Efficiency, while matching Schema.
+
+#### 4.1.3 The Non-Dominated Pareto Frontier ($\mathcal{P}^{\ast}$)
+The **Pareto Frontier** $\mathcal{P}^{\ast}$ is the set of all candidates that are not dominated by any other prompt in the population:
 $$\mathcal{P}^{\ast} = \left\lbrace c \in C \mid \nexists c' \in C : c' \succ c \right\rbrace$$
 
-### 4.2 Crowding Distance Diversity Metric
-To prevent all prompts from converging to a single point along the trade-off curve, GEPA calculates crowding distance $d_i$ for each solution on the frontier:
+- **$C$**: The global pool of all candidate prompts tested so far.
+- **$\nexists c' \in C : c' \succ c$**: There is **no other prompt** $c'$ that dominates prompt $c$.
+
+> **Plain-English Rule**: The Pareto Frontier represents the **optimal trade-off surface**. Prompts on the frontier represent the best possible compromises:
+> - **Prompt X** might achieve 98% accuracy but requires 400 tokens (verbose reasoning).
+> - **Prompt Y** might achieve 92% accuracy in only 80 tokens (ultra-fast and cheap).
+> 
+> Neither prompt dominates the other (X wins on accuracy; Y wins on speed/cost). Therefore, **both belong on the Pareto Frontier**, allowing engineers to choose the optimal trade-off for their production constraints.
+
+---
+
+### 4.2 Crowding Distance Diversity Metric ($d_i$)
+
+To prevent prompts from prematurely converging into a single dense cluster (e.g. dozens of nearly identical 300-token prompts), GEPA uses NSGA-II **crowding distance** to measure how isolated each solution is along the trade-off frontier:
 $$d_i = \sum_{m=1}^{k} \frac{f_m(i+1) - f_m(i-1)}{f_m^{\max} - f_m^{\min}}$$
-Candidates with higher crowding distance are prioritized during parent selection, preserving diverse prompt styles (e.g. ultra-compact vs highly-detailed reasoning).
+
+- **$d_i$**: The crowding distance of candidate $i$ (higher score = more unique and isolated).
+- **$f_m(i+1) - f_m(i-1)$**: The distance between candidate $i$'s nearest neighbors along objective $m$.
+- **$f_m^{\max} - f_m^{\min}$**: The normalization factor across the population's score range.
+
+> **Plain-English Rule**: When selecting parent prompts for breeding and mutation:
+> 1. Candidates on the Rank 1 Pareto frontier are prioritized first.
+> 2. Between two candidates of the same rank, the candidate with the **larger crowding distance** is selected.
+>
+> This guarantees the evolutionary process continuously explores both ends of the frontier (ultra-concise zero-shot prompts AND comprehensive chain-of-thought prompts) rather than collapsing onto a single prompt style.
+
+---
 
 ### 4.3 Natural Language Reflection Formulation
-Unlike Reinforcement Learning where feedback is a scalar reward $R \in \mathbb{R}$, GEPA constructs a natural language diagnostic context $\mathcal{D}$:
-$$\mathcal{D} = \left\lbrace (x_i, y_i, \hat{y}_i, \mathcal{C}_i) \mid \text{trace } i \text{ failed} \right\rbrace$$
-where:
-- $x_i$: input query
-- $y_i$: target ground truth
-- $\hat{y}_i$: model output
-- $\mathcal{C}_i$: specific failure critique
 
-The Reflector LLM evaluates:
+Unlike Reinforcement Learning (PPO / GRPO), which reduces execution to an uninformative scalar reward (e.g. $R = 0.45$), GEPA constructs a **diagnostic failure context** $\mathcal{D}$ containing the full execution traces of failed test samples:
+$$\mathcal{D} = \left\lbrace (x_i, y_i, \hat{y}_i, \mathcal{C}_i) \mid \text{trace } i \text{ failed} \right\rbrace$$
+where for each failed sample $i$:
+- $x_i$: The input query / context presented to the task model.
+- $y_i$: The expected ground truth output.
+- $\hat{y}_i$: The model's actual incorrect generation.
+- $\mathcal{C}_i$: The specific automated critique (e.g. *"Missing required key 'category'; returned markdown backticks instead of raw JSON"*).
+
+#### 4.3.1 Reflector LLM Diagnosis & Mutation
+The Reflector LLM acts as an expert prompt engineer / coach, taking the failure dossier and parent prompt to synthesize targeted instructions:
 $$(\text{Diagnosis}, \text{Strategy}, c_{\text{new}}) \sim P_{\text{reflector}}\left( \cdot \mid \mathcal{D}, c_{\text{parent}}, \text{TaskSpec} \right)$$
+
+1. **Diagnosis**: Explains in natural language *why* the parent prompt triggered model failure on the test cases in $\mathcal{D}$.
+2. **Strategy**: Formulates a generalized invariant rule or behavioral correction.
+3. **New Prompt ($c_{\text{new}}$)**: Rewrites the system prompt incorporating the corrective strategy without regressing on previously passed samples.
 
 ---
 
