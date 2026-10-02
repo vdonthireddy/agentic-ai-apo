@@ -6,142 +6,105 @@ This document provides a comprehensive technical reference for the GEPA Prompt O
 
 ---
 
-## 1. High-Level System Architecture (HLSA)
+## 1. High-Level System Architecture & Flow
 
-The system consists of four primary tiers:
-1. **Presentation & Observability Tier**: Web Dashboard (Port 18435), WebSocket live streaming, Canvas-rendered Pareto frontier, and CLI interface.
-2. **API & Orchestration Tier**: FastAPI application managing asynchronous optimization jobs, candidate telemetry, and side-by-side prompt testing.
-3. **Core GEPA Algorithmic Tier**: Evaluator & Trace Collector, NSGA-II style Pareto Dominance engine, Reflector Engine, and Genetic Breeding Engine.
-4. **Local LLM Execution Tier**: Ollama REST API (`/api/generate`, `/api/tags`) running locally on host machine or bridged through Docker gateway.
+The GEPA framework is structured into four primary connected tiers, with a dedicated observability and delivery pipeline:
+
+1. **Presentation & Client Tier**: Web Dashboard (Port 18435) and rich terminal CLI (`cli.py`) for configuring optimization targets, monitoring Pareto convergence, and comparing prompts side-by-side.
+2. **API & Orchestration Tier**: FastAPI application (`app/main.py`) managing asynchronous background optimization workers and real-time WebSocket telemetry streaming.
+3. **Core GEPA Algorithmic Engine**: Evaluator & trace collector (`evaluator.py`), multi-objective Pareto dominance engine (`pareto.py`), and natural language LLM reflector & genetic mutator (`reflector.py`, `genetic_ops.py`).
+4. **Local LLM Inference Tier**: Host Ollama instance (Port 11434) running task models (e.g. `llama3.2`) for evaluation rollouts and reflector models (e.g. `mistral`) for failure diagnosis.
+5. **Observability & Delivery Tier**: WebSocket event dispatcher delivering live Pareto frontier updates, metric convergence charts, and production-ready optimal prompts.
+
+### High-Level System Connectivity & Evolutionary Flow
 
 ```mermaid
-graph TD
-    subgraph Client_Layer ["Client & Observability Layer"]
-        UI["Web Dashboard (Port 18435)<br/>HTML5 / Modern CSS / Vanilla JS"]
-        WSClient["WebSocket Telemetry Client"]
-        CLI["Rich Terminal CLI (cli.py)"]
+flowchart TD
+    subgraph TIER1 ["1. Presentation & Client Tier"]
+        CLIENT["🖥️ Web Dashboard (Port 18435) / Rich CLI (cli.py)<br/>• Configure seed prompt, benchmark dataset & target objectives<br/>• Live Pareto frontier visualization & candidate comparisons"]
     end
 
-    subgraph Service_Layer ["Application & API Layer (FastAPI)"]
-        API["FastAPI App (app/main.py)"]
-        WSManager["WebSocket Connection Manager"]
-        JobRunner["Background Job Orchestrator"]
-        Endpoints["REST API (/api/health, /api/optimize, /api/playground)"]
+    subgraph TIER2 ["2. API & Orchestration Tier (FastAPI)"]
+        API["⚡ FastAPI Application (app/main.py)<br/>• Job Lifecycle Manager: async optimization workers<br/>• WebSocket Telemetry Hub: real-time streaming broadcaster"]
     end
 
-    subgraph GEPA_Core ["GEPA Algorithmic Core"]
-        Orchestrator["GEPAOptimizer (app/core/gepa_optimizer.py)"]
-        Evaluator["Evaluator & Trace Collector (app/core/evaluator.py)"]
-        ParetoEngine["Pareto Frontier Engine (app/core/pareto.py)"]
-        ReflectorEngine["Reflection & Diagnosis Engine (app/core/reflector.py)"]
-        GeneticEngine["Genetic Ops Engine (app/core/genetic_ops.py)"]
-        Benchmarks["Benchmark Examples Registry (app/examples/)"]
+    subgraph TIER3 ["3. GEPA Optimization Engine (app/core)"]
+        direction LR
+        EVAL["🔍 Step 1: Evaluator<br/>Run benchmark tests & collect traces"]
+        PARETO["📊 Step 2: Pareto Sorter<br/>Rank Accuracy vs Schema vs Cost"]
+        REFLECT["🧬 Step 3: Reflector & Mutator<br/>LLM diagnosis & genetic breeding"]
+
+        EVAL -->|"Candidate Traces"| PARETO
+        PARETO -->|"Frontier Parents"| REFLECT
+        REFLECT -->|"Mutated Prompts"| EVAL
     end
 
-    subgraph Host_Inference ["Local Model Tier (Ollama)"]
-        OllamaBridge["Ollama Client (app/core/ollama_client.py)"]
-        HostOllama["Host Ollama Server (Port 11434)"]
-        TaskModel["Task Model (e.g., llama3.2:latest)"]
-        ReflectorModel["Reflector Model (e.g., llama3.2 / mistral)"]
+    subgraph TIER4 ["4. Local Inference Tier (Ollama Port 11434)"]
+        direction LR
+        TASK_LLM["🦙 Task Model (llama3.2)<br/>Test rollouts"]
+        REF_LLM["🧠 Reflector Model (mistral)<br/>Error diagnosis"]
     end
 
-    UI -->|HTTP / SSE| Endpoints
-    WSClient <-->|WebSocket Stream /ws| WSManager
-    CLI -->|Local Invocations| Orchestrator
+    subgraph TIER5 ["5. Observability & Delivery"]
+        direction LR
+        LIVE["📡 Real-Time Telemetry<br/>Live WebSocket updates"]
+        BEST["🏆 Optimal Pareto Prompt<br/>Production export"]
+    end
 
-    Endpoints --> JobRunner
-    JobRunner --> Orchestrator
-    Orchestrator --> Evaluator
-    Orchestrator --> ParetoEngine
-    Orchestrator --> ReflectorEngine
-    Orchestrator --> GeneticEngine
-    Evaluator --> Benchmarks
+    CLIENT -->|"1. Submit Optimization Config"| API
+    API -->|"2. Dispatch Optimization Run"| EVAL
 
-    Orchestrator --> WSManager
-    ReflectorEngine --> OllamaBridge
-    Evaluator --> OllamaBridge
+    EVAL <-->|"Rollouts"| TASK_LLM
+    REFLECT <-->|"Diagnosis"| REF_LLM
 
-    OllamaBridge -->|REST API| HostOllama
-    HostOllama --> TaskModel
-    HostOllama --> ReflectorModel
+    PARETO -.->|"3. Stream Telemetry Events"| LIVE
+    PARETO ==>|"4. Deliver Optimal Frontier"| BEST
 ```
+
+### Component Connectivity & Data Flow Summary
+
+| Connection / Link | Source → Target | Protocol / Mechanism | Description |
+| :--- | :--- | :--- | :--- |
+| **1. Job Submission** | Web UI / CLI → FastAPI | HTTP `POST /api/optimize` | User configures seed prompt, benchmark dataset, and optimization hyper-parameters. |
+| **2. Worker Dispatch** | FastAPI → GEPA Core | Async Task Runner | Background thread initializes Population Generation 0 and kicks off the evolutionary loop. |
+| **3. Benchmark Rollouts** | Evaluator ↔ Ollama | REST `POST /api/generate` | Local Ollama runs test cases against candidate prompts, recording accuracy, schema validity, and latency. |
+| **4. Failure Reflection** | Reflector ↔ Ollama | REST `POST /api/generate` | Reflector LLM diagnoses root-cause error traces and synthesizes targeted instruction fixes. |
+| **5. Live Telemetry** | Pareto Sorter → Web UI | WebSocket `/ws` | Streaming events broadcast live frontier coordinates, candidate scores, and diagnostic reflections. |
+| **6. Prompt Delivery** | GEPA Core → Web UI | REST / WebSocket / File | Production-ready non-dominated prompt candidate delivered with side-by-side playground testing. |
 
 ---
 
 ## 2. End-to-End Sequence Diagram
 
-The following diagram illustrates the complete execution flow from when a user clicks "Start GEPA Optimization" to when the final Pareto-optimal prompt is delivered:
+The following sequence diagram illustrates the complete execution flow from when a user clicks "Start GEPA Optimization" to when the final Pareto-optimal prompt is delivered:
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor User as User / Web UI
-    participant Server as FastAPI Server (Port 18435)
-    participant GEPA as GEPA Optimizer Engine
-    participant Eval as Evaluator & Traces
-    participant Pareto as Pareto Frontier Engine
-    participant Reflector as Reflector LLM Engine
-    participant Ollama as Local Ollama (llama3.2)
+    participant API as FastAPI Server
+    participant GEPA as GEPA Optimizer Core
+    participant Ollama as Local Ollama (Port 11434)
 
-    User->>Server: POST /api/optimize (example, models, hyperparams)
-    Server->>GEPA: Initialize Population (Gen 0 Seed + Variations)
-    Server-->>User: 200 OK (Optimization Started)
+    User->>API: 1. POST /api/optimize (Seed prompt, benchmark, hyperparams)
+    API->>GEPA: 2. Launch background optimization job
+    API-->>User: 3. Return Job ID (200 OK)
 
-    rect rgb(18, 30, 48)
-        note over GEPA, Ollama: Generation 0: Baseline Evaluation
-        loop For each Candidate in Gen 0
-            GEPA->>Eval: Evaluate Candidate on Training Samples
-            loop For each Sample
-                Eval->>Ollama: POST /api/generate (System Prompt, Input Text)
-                Ollama-->>Eval: Model Output, Latency, Token Count
-                Eval->>Eval: Parse JSON, Compute Metrics & Failure Critique
-            end
-            Eval-->>GEPA: Candidate with Execution Traces & Objective Vector
-            GEPA-->>Server: Broadcast Candidate Evaluated Event
-        end
-        GEPA->>Pareto: Compute Non-Dominated Sort & Crowding Distance
-        Pareto-->>GEPA: Pareto Frontier (Rank 1 Candidates)
-        GEPA-->>User: Broadcast Gen 0 Snapshot (Frontier & Chart Data)
+    loop Generation 0 to N (Evolutionary Loop)
+        GEPA->>Ollama: 4. Rollout candidates on benchmark samples
+        Ollama-->>GEPA: Execution outputs, latency & token usage
+        GEPA->>GEPA: 5. Calculate Pareto Frontier (Accuracy, Schema, Cost)
+        GEPA-->>User: 6. Stream live telemetry snapshot (WebSocket)
+        GEPA->>Ollama: 7. Request LLM reflection on failure traces
+        Ollama-->>GEPA: Diagnosis, fix strategy & mutated prompt
     end
 
-    rect rgb(28, 22, 45)
-        note over GEPA, Ollama: Evolutionary Loop (Gen 1 to G)
-        loop Generation 1 to G
-            alt Mutation Probability (p_m = 0.7)
-                GEPA->>Pareto: Sample Parent from Pareto Frontier
-                GEPA->>Reflector: Extract Parent Failure Traces
-                Reflector->>Ollama: POST /api/generate (Failure Traces + Task Spec)
-                Ollama-->>Reflector: Diagnosis, Strategy, and Mutated Prompt
-                Reflector-->>GEPA: Mutated Child Candidate
-            else Crossover Probability (p_c = 0.3)
-                GEPA->>Pareto: Sample Parent A & Parent B from Frontier
-                GEPA->>Reflector: Request Genetic Synthesis
-                Reflector->>Ollama: POST /api/generate (Parent A + Parent B)
-                Ollama-->>Reflector: Synthesized Hybrid Prompt
-                Reflector-->>GEPA: Crossed Child Candidate
-            end
-
-            GEPA->>Eval: Evaluate Child Candidates on Benchmark
-            Eval->>Ollama: Rollout Inference
-            Ollama-->>Eval: Outputs & Timing
-            Eval-->>GEPA: Evaluated Child Traces
-
-            GEPA->>Pareto: Update Global Population & Recalculate Frontier
-            Pareto-->>GEPA: New Rank 1 Frontier (Dominated Prompts Pruned)
-            GEPA-->>User: Broadcast Gen N Snapshot & Reflector Card
-        end
-    end
-
-    rect rgb(18, 40, 30)
-        note over GEPA, User: Final Validation & Delivery
-        GEPA->>Eval: Evaluate Best Frontier Candidate on Validation Set
-        Eval-->>GEPA: Validation Scores
-        GEPA-->>User: Broadcast OPTIMIZATION_FINISHED
-        User->>Server: POST /api/playground/test (Side-by-Side Test)
-        Server->>Ollama: Rollout Baseline vs Optimized
-        Ollama-->>Server: Responses
-        Server-->>User: Side-by-Side Diff, Latencies, Schema Checks
-    end
+    GEPA->>API: 8. Optimization complete (Best Pareto frontier candidates)
+    API-->>User: 9. Final notification & deliver optimal prompts
+    User->>API: 10. POST /api/playground/test (Side-by-side verification)
+    API->>Ollama: Test Baseline vs Optimized prompt
+    Ollama-->>API: Outputs & comparative metrics
+    API-->>User: Side-by-side diff & verification report
 ```
 
 ---
@@ -151,63 +114,48 @@ sequenceDiagram
 The data flow highlights how raw failure critiques are transformed into refined prompt instructions without losing schema validity or token efficiency:
 
 ```mermaid
-flowchart TD
-    subgraph Inputs ["Input Specifications"]
-        Seed["Initial Seed Prompt"]
-        TaskSpec["Task Description & Requirements"]
-        Dataset["Benchmark Dataset (Train & Val Splits)"]
-        Objectives["Objective Vector Definitions (Acc, Schema, Cost)"]
+flowchart LR
+    subgraph IN ["1. Inputs"]
+        direction TB
+        SEED["Seed Prompt"]
+        DATA["Benchmark Dataset"]
+        OBJ["Objective Criteria<br/>(Acc, Schema, Cost)"]
     end
 
-    subgraph Evaluation_Flow ["Evaluation & Tracing"]
-        Rollout["Local Model Rollout (Ollama)"]
-        TraceGen["Execution Trace Generator"]
-        MetricAgg["Multi-Objective Score Aggregator"]
+    subgraph EVAL ["2. Candidate Evaluation"]
+        direction TB
+        ROLLOUT["Ollama Rollouts<br/>Task Model Inference"]
+        TRACE["Trace Collector<br/>Metrics & Error Logs"]
+        ROLLOUT --> TRACE
     end
 
-    subgraph Genetic_Pareto_Core ["Genetic-Pareto Core"]
-        Frontier["Pareto Frontier Pool (Non-Dominated Set)"]
-        DomCheck{"Dominates Check: A >= B on all & A > B on one?"}
-        RankAssign["Rank 1 Frontier Assignment & Crowding Distance"]
+    subgraph PARETO ["3. Multi-Objective Selection"]
+        direction TB
+        DOM["Dominance Check<br/>A dominates B?"]
+        FRONT["Pareto Frontier Pool<br/>Rank 1 Non-Dominated"]
+        DOM --> FRONT
     end
 
-    subgraph Reflection_Mutation ["Natural Language Reflection"]
-        TraceFilter["Failure Trace Filter (Passed == False)"]
-        DiagModel["Reflector LLM (Ollama)"]
-        Diagnosis["Root-Cause Diagnosis"]
-        Prescription["Targeted Invariant Rules"]
-        Offspring["Mutated / Crossed Prompt Candidates"]
+    subgraph REFLECT ["4. Natural Language Reflection"]
+        direction TB
+        FILTER["Failure Trace Filter<br/>Extract Failed Cases"]
+        COACH["Reflector LLM<br/>Root-Cause Diagnosis"]
+        MUTATE["Mutated / Crossed<br/>Candidate Prompts"]
+        FILTER --> COACH --> MUTATE
     end
 
-    subgraph Outputs ["Final Output & Telemetry"]
-        BestPrompt["Optimal Pareto Prompt"]
-        Telemetry["Real-time WebSocket JSON Events"]
-        Audit["Diagnostic Audit Log & Lineage"]
+    subgraph OUT ["5. Outputs"]
+        direction TB
+        BEST["Optimal Pareto Prompts"]
+        STREAM["WebSocket Telemetry"]
     end
 
-    Seed --> Rollout
-    Dataset --> Rollout
-    Rollout --> TraceGen
-    TraceGen --> MetricAgg
-    MetricAgg --> DomCheck
-
-    DomCheck -->|Non-dominated| Frontier
-    Frontier --> RankAssign
-    RankAssign --> TraceFilter
-
-    TraceFilter --> DiagModel
-    TaskSpec --> DiagModel
-    Objectives --> DiagModel
-
-    DiagModel --> Diagnosis
-    Diagnosis --> Prescription
-    Prescription --> Offspring
-    Offspring --> Rollout
-
-    Frontier --> BestPrompt
-    MetricAgg --> Telemetry
-    Diagnosis --> Telemetry
-    Diagnosis --> Audit
+    IN --> ROLLOUT
+    TRACE --> DOM
+    FRONT --> FILTER
+    MUTATE -->|"New Generation"| ROLLOUT
+    FRONT --> BEST
+    TRACE -.-> STREAM
 ```
 
 ---
