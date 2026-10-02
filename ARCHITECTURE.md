@@ -173,8 +173,8 @@ where:
 Candidate $c_a$ **Pareto-dominates** candidate $c_b$ ($c_a \succ c_b$) if and only if:
 $$\forall i \in \{1, \dots, k\}, \quad f_i(c_a) \ge f_i(c_b) \quad \land \quad \exists j \in \{1, \dots, k\}, \quad f_j(c_a) > f_j(c_b)$$
 
-The **Pareto Frontier** $\mathcal{P}^*$ is the subset of all candidates not dominated by any other candidate:
-$$\mathcal{P}^* = \left\lbrace c \in C \;\middle|\; \nexists c' \in C : c' \succ c \right\rbrace$$
+The **Pareto Frontier** $\mathcal{P}^{\ast}$ is the subset of all candidates not dominated by any other candidate:
+$$\mathcal{P}^{\ast} = \left\lbrace c \in C \mid \nexists c' \in C : c' \succ c \right\rbrace$$
 
 ### 4.2 Crowding Distance Diversity Metric
 To prevent all prompts from converging to a single point along the trade-off curve, GEPA calculates crowding distance $d_i$ for each solution on the frontier:
@@ -183,7 +183,7 @@ Candidates with higher crowding distance are prioritized during parent selection
 
 ### 4.3 Natural Language Reflection Formulation
 Unlike Reinforcement Learning where feedback is a scalar reward $R \in \mathbb{R}$, GEPA constructs a natural language diagnostic context $\mathcal{D}$:
-$$\mathcal{D} = \left\lbrace (x_i, y_i, \hat{y}_i, \mathcal{C}_i) \;\middle|\; \text{trace } i \text{ failed} \right\rbrace$$
+$$\mathcal{D} = \left\lbrace (x_i, y_i, \hat{y}_i, \mathcal{C}_i) \mid \text{trace } i \text{ failed} \right\rbrace$$
 where:
 - $x_i$: input query
 - $y_i$: target ground truth
@@ -191,7 +191,7 @@ where:
 - $\mathcal{C}_i$: specific failure critique
 
 The Reflector LLM evaluates:
-$$(\text{Diagnosis}, \text{Strategy}, c_{\text{new}}) \sim P_{\text{reflector}}\left( \cdot \;\middle|\; \mathcal{D}, c_{\text{parent}}, \text{TaskSpec} \right)$$
+$$(\text{Diagnosis}, \text{Strategy}, c_{\text{new}}) \sim P_{\text{reflector}}\left( \cdot \mid \mathcal{D}, c_{\text{parent}}, \text{TaskSpec} \right)$$
 
 ---
 
