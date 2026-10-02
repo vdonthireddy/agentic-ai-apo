@@ -216,7 +216,7 @@ flowchart TD
 
 ### 4.1 Pareto Dominance Formulation
 Let $C = \{c_1, c_2, \dots, c_m\}$ be candidate prompts. For each candidate $c$, the evaluator computes an objective vector:
-$$\mathbf{F}(c) = \Big(f_1(c), f_2(c), \dots, f_k(c)\Big)$$
+$$\mathbf{F}(c) = \left( f_1(c), f_2(c), \dots, f_k(c) \right)$$
 where:
 - $f_1(c) \in [0, 1]$: Core Task Accuracy / F1
 - $f_2(c) \in [0, 1]$: Strict Schema Compliance (JSON validity, key presence)
@@ -226,7 +226,7 @@ Candidate $c_a$ **Pareto-dominates** candidate $c_b$ ($c_a \succ c_b$) if and on
 $$\forall i \in \{1, \dots, k\}, \quad f_i(c_a) \ge f_i(c_b) \quad \land \quad \exists j \in \{1, \dots, k\}, \quad f_j(c_a) > f_j(c_b)$$
 
 The **Pareto Frontier** $\mathcal{P}^*$ is the subset of all candidates not dominated by any other candidate:
-$$\mathcal{P}^* = \Big\{ c \in C \;\Big|\; \nexists c' \in C : c' \succ c \Big\}$$
+$$\mathcal{P}^* = \left\lbrace c \in C \;\middle|\; \nexists c' \in C : c' \succ c \right\rbrace$$
 
 ### 4.2 Crowding Distance Diversity Metric
 To prevent all prompts from converging to a single point along the trade-off curve, GEPA calculates crowding distance $d_i$ for each solution on the frontier:
@@ -235,7 +235,7 @@ Candidates with higher crowding distance are prioritized during parent selection
 
 ### 4.3 Natural Language Reflection Formulation
 Unlike Reinforcement Learning where feedback is a scalar reward $R \in \mathbb{R}$, GEPA constructs a natural language diagnostic context $\mathcal{D}$:
-$$\mathcal{D} = \Big\{ (x_i, y_i, \hat{y}_i, \mathcal{C}_i) \;\Big|\; \text{trace}_i \text{ failed} \Big\}$$
+$$\mathcal{D} = \left\lbrace (x_i, y_i, \hat{y}_i, \mathcal{C}_i) \;\middle|\; \text{trace } i \text{ failed} \right\rbrace$$
 where:
 - $x_i$: input query
 - $y_i$: target ground truth
@@ -243,7 +243,7 @@ where:
 - $\mathcal{C}_i$: specific failure critique
 
 The Reflector LLM evaluates:
-$$(\text{Diagnosis}, \text{Strategy}, c_{\text{new}}) \sim P_{\text{reflector}}\Big(\cdot \;\Big|\; \mathcal{D}, c_{\text{parent}}, \text{TaskSpec}\Big)$$
+$$(\text{Diagnosis}, \text{Strategy}, c_{\text{new}}) \sim P_{\text{reflector}}\left( \cdot \;\middle|\; \mathcal{D}, c_{\text{parent}}, \text{TaskSpec} \right)$$
 
 ---
 
