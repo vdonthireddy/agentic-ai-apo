@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  gepa-apo:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gepa-prompt-optimizer
+    restart: unless-stopped
+    ports:
+      - "18435:18435"
+    environment:
+      - PORT=18435
+      - HOST=0.0.0.0
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      - DEFAULT_TASK_MODEL=llama3.2:latest
+      - DEFAULT_REFLECTOR_MODEL=llama3.2:latest
+      - POPULATION_SIZE=4
+      - GENERATIONS=3
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:18435/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s

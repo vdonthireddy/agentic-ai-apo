@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GEPA Automatic Prompt Optimizer | Genetic-Pareto Evolution</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body class="dark-theme">
+    <!-- Top Navigation Bar -->
+    <header class="navbar">
+        <div class="nav-brand">
+            <div class="brand-logo">🧬</div>
+            <div class="brand-text">
+                <h1>GEPA Prompt Optimizer</h1>
+                <span class="sub-badge">Genetic-Pareto Reflective Evolution</span>
+            </div>
+        </div>
+
+        <div class="nav-status">
+            <div class="status-badge" id="ollama-status-badge">
+                <span class="indicator-dot loading" id="ollama-dot"></span>
+                <span id="ollama-status-text">Checking Ollama...</span>
+            </div>
+            <div class="port-badge">
+                <span>PORT</span>
+                <strong>18435</strong>
+            </div>
+            <div class="status-badge opt-idle" id="opt-state-badge">
+                <span class="state-dot" id="opt-dot"></span>
+                <span id="opt-state-text">IDLE</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container Layout -->
+    <main class="dashboard-grid">
+        <!-- Left Sidebar: Configuration & Controls -->
+        <aside class="sidebar-panel">
+            <div class="panel-header">
+                <h2>⚙️ Configuration</h2>
+                <button class="btn-icon" id="btn-refresh-models" title="Refresh local Ollama models">🔄</button>
+            </div>
+
+            <!-- Task Selector -->
+            <div class="form-group">
+                <label for="example-select">Benchmark Task / Example</label>
+                <select id="example-select" class="form-control">
+                    <option value="customer_support">Support Ticket Triage & Intent Routing (JSON)</option>
+                    <option value="financial_risk">Contract Risk & Liability Extractor (Legal)</option>
+                    <option value="medical_triage">ER Triage & Vital CoT (Healthcare)</option>
+                    <option value="custom">Custom Task & Prompt...</option>
+                </select>
+            </div>
+
+            <div class="task-info-card" id="task-info-box">
+                <div class="info-row">
+                    <span class="info-label">Domain:</span>
+                    <span id="task-domain" class="info-val">SaaS & E-commerce Operations</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Objectives:</span>
+                    <span id="task-objectives" class="info-val tags">accuracy, schema, efficiency</span>
+                </div>
+                <div class="info-desc" id="task-desc">
+                    Triages inbound customer tickets into strict JSON schema with category, urgency, and sentiment.
+                </div>
+            </div>
+
+            <!-- Custom task section (hidden by default) -->
+            <div id="custom-task-section" class="custom-section hidden">
+                <div class="form-group">
+                    <label for="custom-task-desc">Task Description</label>
+                    <textarea id="custom-task-desc" class="form-control" rows="2" placeholder="Describe the task and required output..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="custom-seed-prompt">Initial Seed Prompt</label>
+                    <textarea id="custom-seed-prompt" class="form-control" rows="2" placeholder="Your unoptimized baseline prompt..."></textarea>
+                </div>
+            </div>
+
+            <!-- Local Model Selection -->
+            <div class="form-group">
+                <label for="task-model-select">Target Task Model (Ollama)</label>
+                <select id="task-model-select" class="form-control">
+                    <option value="llama3.2:latest">llama3.2:latest (Local)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="reflector-model-select">Reflector / Mutator Model</label>
+                <select id="reflector-model-select" class="form-control">
+                    <option value="llama3.2:latest">llama3.2:latest (Local)</option>
+                </select>
+                <small class="helper-text">LLM that reflects on failure traces to diagnose errors.</small>
+            </div>
+
+            <!-- Evolution Parameters -->
+            <div class="param-grid">
+                <div class="form-group">
+                    <label for="param-pop-size">Population (N)</label>
+                    <input type="number" id="param-pop-size" class="form-control" min="3" max="10" value="4">
+                </div>
+                <div class="form-group">
+                    <label for="param-generations">Generations (G)</label>
+                    <input type="number" id="param-generations" class="form-control" min="1" max="10" value="3">
+                </div>
+                <div class="form-group">
+                    <label for="param-mutation-rate">Mutation Rate</label>
+                    <input type="number" id="param-mutation-rate" class="form-control" min="0.1" max="1.0" step="0.1" value="0.7">
+                </div>
+                <div class="form-group">
+                    <label for="param-crossover-rate">Crossover Rate</label>
+                    <input type="number" id="param-crossover-rate" class="form-control" min="0.0" max="1.0" step="0.1" value="0.3">
+                </div>
+            </div>
+
+            <!-- Action Controls -->
+            <div class="action-buttons">
+                <button id="btn-start-opt" class="btn btn-primary">
+                    <span class="btn-icon-symbol">🚀</span> Start GEPA Optimization
+                </button>
+                <button id="btn-stop-opt" class="btn btn-danger hidden">
+                    <span class="btn-icon-symbol">⏹</span> Stop Run
+                </button>
+            </div>
+
+            <!-- Quick Seed Prompt Preview -->
+            <div class="prompt-preview-card">
+                <div class="preview-header">
+                    <span>Baseline Seed Prompt</span>
+                    <button id="btn-edit-seed" class="btn-link">Edit</button>
+                </div>
+                <pre id="seed-prompt-preview">Loading seed prompt...</pre>
+            </div>
+        </aside>
+
+        <!-- Right Content Area: Tabs & Visualizations -->
+        <section class="main-content-panel">
+            <!-- Navigation Tabs -->
+            <div class="tabs-header">
+                <button class="tab-btn active" data-tab="tab-evolution">🧬 Evolution & Pareto Frontier</button>
+                <button class="tab-btn" data-tab="tab-reflector">🧠 Reflector Deep-Dive</button>
+                <button class="tab-btn" data-tab="tab-playground">⚡ Side-by-Side Playground</button>
+                <button class="tab-btn" data-tab="tab-logs">📜 Telemetry & Internal Logs</button>
+            </div>
+
+            <!-- Tab 1: Evolution & Pareto Frontier -->
+            <div class="tab-pane active" id="tab-evolution">
+                <!-- KPI Stats Row -->
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <span class="kpi-label">Generation</span>
+                        <div class="kpi-value" id="kpi-gen">0 / 3</div>
+                        <div class="kpi-sub" id="kpi-gen-sub">Awaiting launch</div>
+                    </div>
+                    <div class="kpi-card">
+                        <span class="kpi-label">Candidates Evaluated</span>
+                        <div class="kpi-value" id="kpi-candidates">0</div>
+                        <div class="kpi-sub">Total prompt rollouts</div>
+                    </div>
+                    <div class="kpi-card">
+                        <span class="kpi-label">Pareto Frontier Size</span>
+                        <div class="kpi-value" id="kpi-frontier">0</div>
+                        <div class="kpi-sub">Non-dominated candidates</div>
+                    </div>
+                    <div class="kpi-card highlight">
+                        <span class="kpi-label">Top Metric Improvement</span>
+                        <div class="kpi-value" id="kpi-improvement">0.0%</div>
+                        <div class="kpi-sub" id="kpi-improvement-sub">vs baseline seed</div>
+                    </div>
+                </div>
+
+                <!-- Pareto Frontier Scatter Plot & Chart -->
+                <div class="card chart-card">
+                    <div class="card-header">
+                        <div>
+                            <h3>Pareto Frontier Multi-Objective Landscape</h3>
+                            <span class="card-subtitle">Non-dominated trade-off frontier (Accuracy vs. Token Efficiency)</span>
+                        </div>
+                        <div class="chart-legend">
+                            <span class="legend-item"><span class="dot seed"></span> Baseline Seed</span>
+                            <span class="legend-item"><span class="dot dominated"></span> Evaluated Variants</span>
+                            <span class="legend-item"><span class="dot frontier"></span> Pareto Frontier (Rank 1)</span>
+                        </div>
+                    </div>
+                    <div class="canvas-container">
+                        <canvas id="pareto-canvas" width="800" height="300"></canvas>
+                        <div id="chart-tooltip" class="chart-tooltip hidden"></div>
+                    </div>
+                </div>
+
+                <!-- Pareto Frontier Candidates Table -->
+                <div class="card table-card">
+                    <div class="card-header">
+                        <h3>🏆 Current Pareto-Optimal Prompts (Rank 1 Non-Dominated)</h3>
+                        <span class="badge" id="frontier-count-badge">0 Candidates</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="data-table" id="frontier-table">
+                            <thead>
+                                <tr>
+                                    <th>Candidate ID</th>
+                                    <th>Gen</th>
+                                    <th>Scores Breakdown</th>
+                                    <th>Avg Latency</th>
+                                    <th>Tokens</th>
+                                    <th>History</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="frontier-table-body">
+                                <tr>
+                                    <td colspan="7" class="empty-state">No candidates evaluated yet. Click "Start GEPA Optimization" to begin.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab 2: Reflector Deep-Dive -->
+            <div class="tab-pane" id="tab-reflector">
+                <div class="card explanation-card">
+                    <h3>🧠 How the GEPA Reflector Learns From Failure Traces</h3>
+                    <p>
+                        Instead of blind trial-and-error or scalar reward RL (like GRPO), GEPA inspects the model's actual failure outputs.
+                        The <strong>Reflector LLM</strong> performs natural language root-cause diagnosis and writes targeted invariant rules.
+                    </p>
+                </div>
+
+                <div class="reflection-stream" id="reflection-stream">
+                    <div class="empty-state-box">
+                        <div class="icon">🔍</div>
+                        <p>No reflections recorded yet. Reflections will appear dynamically as generations progress.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab 3: Side-by-Side Playground -->
+            <div class="tab-pane" id="tab-playground">
+                <div class="card playground-control-card">
+                    <div class="card-header">
+                        <h3>⚡ Interactive Prompt Comparison Playground</h3>
+                        <div class="sample-pills" id="playground-pills">
+                            <span class="pill-label">Quick Test Inputs:</span>
+                            <button class="pill-btn" id="pill-test-1">Sample 1</button>
+                            <button class="pill-btn" id="pill-test-2">Sample 2</button>
+                            <button class="pill-btn" id="pill-test-3">Edge Case</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <textarea id="playground-input" class="form-control code-font" rows="3" placeholder="Enter a raw test input to compare how the baseline prompt vs the optimized prompt performs..."></textarea>
+                    </div>
+                    <button id="btn-run-playground" class="btn btn-secondary">
+                        <span>▶</span> Test Both Prompts Side-by-Side
+                    </button>
+                </div>
+
+                <!-- Comparison Cards Grid -->
+                <div class="comparison-grid">
+                    <!-- Left: Initial Baseline -->
+                    <div class="card comp-card initial-card">
+                        <div class="comp-header">
+                            <span class="comp-tag tag-red">Initial Baseline Prompt</span>
+                            <div class="comp-metrics" id="init-metrics">
+                                <span>Latency: --</span>
+                                <span>Tokens: --</span>
+                            </div>
+                        </div>
+                        <div class="comp-prompt-box">
+                            <div class="comp-subheading">System Prompt:</div>
+                            <pre id="comp-init-prompt-text">Awaiting initial prompt...</pre>
+                        </div>
+                        <div class="comp-output-box">
+                            <div class="comp-subheading">Model Output:</div>
+                            <pre id="comp-init-output">No test executed yet.</pre>
+                        </div>
+                    </div>
+
+                    <!-- Right: Best Optimized -->
+                    <div class="card comp-card optimized-card">
+                        <div class="comp-header">
+                            <span class="comp-tag tag-green">🏆 GEPA Optimized Prompt</span>
+                            <div class="comp-metrics" id="opt-metrics">
+                                <span>Latency: --</span>
+                                <span>Tokens: --</span>
+                            </div>
+                        </div>
+                        <div class="comp-prompt-box">
+                            <div class="comp-subheading">System Prompt:</div>
+                            <pre id="comp-opt-prompt-text">Awaiting optimization run...</pre>
+                        </div>
+                        <div class="comp-output-box">
+                            <div class="comp-subheading">Model Output:</div>
+                            <pre id="comp-opt-output">No test executed yet.</pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab 4: Telemetry & Internal Logs -->
+            <div class="tab-pane" id="tab-logs">
+                <div class="card terminal-card">
+                    <div class="terminal-header">
+                        <div class="term-dots">
+                            <span class="term-dot red"></span>
+                            <span class="term-dot yellow"></span>
+                            <span class="term-dot green"></span>
+                        </div>
+                        <div class="term-title">GEPA Engine Internal Diagnostics & Execution Stream</div>
+                        <div class="term-actions">
+                            <label><input type="checkbox" id="chk-autoscroll" checked> Auto-scroll</label>
+                            <button class="btn-xs" id="btn-clear-logs">Clear</button>
+                        </div>
+                    </div>
+                    <div class="terminal-body" id="terminal-logs">
+                        <div class="log-entry log-INFO">
+                            <span class="log-time">[System]</span>
+                            <span class="log-badge badge-INFO">SYSTEM</span>
+                            <span class="log-msg">GEPA Engine initialized and connected to WebSocket. Ready for run.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Candidate Modal Details -->
+    <div class="modal-overlay hidden" id="candidate-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-candidate-title">Candidate Details</h3>
+                <button class="btn-close" id="btn-close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-section">
+                    <h4>Scores & Efficiency</h4>
+                    <div class="kpi-mini-grid" id="modal-scores-grid"></div>
+                </div>
+                <div class="modal-section">
+                    <h4>Prompt Text</h4>
+                    <pre class="code-view" id="modal-prompt-text"></pre>
+                    <button class="btn-xs btn-copy" id="btn-copy-prompt">📋 Copy Prompt</button>
+                </div>
+                <div class="modal-section">
+                    <h4>Evolutionary Lineage</h4>
+                    <ul class="lineage-list" id="modal-lineage-list"></ul>
+                </div>
+                <div class="modal-section">
+                    <h4>Sample Execution Traces</h4>
+                    <div class="traces-list" id="modal-traces-list"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
